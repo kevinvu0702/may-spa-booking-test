@@ -83,6 +83,34 @@ setupBookingSlots();
 nameInput?.addEventListener('input',()=>{if(nameErr)nameErr.textContent=''});
 phone?.addEventListener('input',()=>{phoneErr.textContent='';if(!phone.dataset.started){phone.dataset.started='1';track('form_start')}});
 
+const bookingModal=$('#booking-success-modal'),bookingModalDetail=$('#booking-success-detail'),bookingModalClose=$('#booking-success-close');
+function closeBookingModal(){if(bookingModal)bookingModal.hidden=true;document.body.style.overflow=''}
+bookingModalClose?.addEventListener('click',closeBookingModal);
+bookingModal?.addEventListener('click',e=>{if(e.target===bookingModal)closeBookingModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bookingModal&&!bookingModal.hidden)closeBookingModal()});
+// Only a verified SAVED response from the Apps Script iframe may confirm a booking.
+// The deployed Apps Script must explicitly postMessage the SAVED result after sheet append.
+window.addEventListener('message',e=>{
+ if(!awaitingLeadResponse||!leadTarget||e.source!==leadTarget.contentWindow)return;
+ if(!/^https:\\/\\/(script\\.google\\.com|[a-z0-9.-]*googleusercontent\\.com)$/.test(e.origin))return;
+ let result=e.data;
+ if(typeof result==='string'){try{result=JSON.parse(result)}catch(_){return}}
+ if(!result||result.app!=='may_spa_booking')return;
+ if(result.ok!==true||result.code!=='SAVED'||!result.booking_id){
+   awaitingLeadResponse=false;submitting=false;
+   const button=form?.querySelector('button[type=submit]');if(button){button.disabled=false;button.textContent='Gửi yêu cầu đặt lịch →'}
+   status.textContent='Chưa thể xác nhận lịch đặt. Vui lòng thử lại hoặc gọi Mây: 0911 400 718.';status.style.color='#8a5b1d';return;
+ }
+ awaitingLeadResponse=false;submitting=false;
+ const date=bookingDate.value.split('-');
+ if(bookingModalDetail)bookingModalDetail.textContent='Ngày đặt lịch: '+date.slice().reverse().join('/')+' • Thời gian: '+bookingTime.value;
+ if(bookingModal){bookingModal.hidden=false;document.body.style.overflow='hidden';bookingModalClose?.focus()}
+ status.textContent='Mây Spa đã nhận yêu cầu đặt lịch.';status.style.color='#087b45';
+ track('generate_lead',{lead_type:'booking_request',booking_status:'cho_xac_nhan'});
+ form?.reset();setupBookingSlots();
+ const button=form?.querySelector('button[type=submit]');if(button){button.disabled=false;button.textContent='Gửi yêu cầu đặt lịch →'}
+});
+
 leadTarget?.addEventListener('load',()=>{
  if(!awaitingLeadResponse)return;
  awaitingLeadResponse=false;
