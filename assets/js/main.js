@@ -48,7 +48,11 @@ function setupFeedback(){
 setupFeedback();
 
 const form=$('#lead-form'), status=$('#form-status'), phone=$('#phone'), phoneErr=$('#phone-error'), nameInput=$('#name'), nameErr=$('#name-error'), leadTarget=$('#lead-submit-target');
-let submitting=false, awaitingLeadResponse=false;
+let submitting=false, awaitingLeadResponse=false, activeRequestId='';
+// Each submission carries an unpredictable ID echoed by Apps Script after the Sheet write.
+const requestField=document.createElement('input');
+requestField.type='hidden';requestField.name='request_id';
+form?.appendChild(requestField);
 function validPhone(v){return /^0[0-9]{9}$/.test(normalizePhone(v))}
 // Persist acquisition attribution in the current browser for direct return visits.
 const attributionKeys=['utm_source','utm_medium','utm_campaign','utm_content','utm_term','gclid','gbraid','wbraid'];
@@ -93,20 +97,21 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bookingModal&&!book
 window.addEventListener('message',e=>{
  // HtmlService may post from a nested googleusercontent iframe, not the outer form target.
  if(!awaitingLeadResponse||!leadTarget)return;
- // Apps Script HtmlService may emit postMessage with an opaque ('null') origin.
- // The message must still originate from our exact hidden iframe and contain a SAVED booking ID.
- if(e.origin==='null')return; // Reject opaque-origin messages until a per-request nonce is implemented server-side.
- let responseOrigin;try{responseOrigin=new URL(e.origin)}catch(_){return}
- if(responseOrigin.protocol!=='https:'||!(responseOrigin.hostname==='script.google.com'||responseOrigin.hostname.endsWith('.googleusercontent.com')))return;
+ // HtmlService may use an opaque origin. Accept it only with a matching
+ // unpredictable per-submission request_id; never accept arbitrary opaque messages.
+ if(e.origin!=='null'){
+   let responseOrigin;try{responseOrigin=new URL(e.origin)}catch(_){return}
+   if(responseOrigin.protocol!=='https:'||!(responseOrigin.hostname==='script.google.com'||responseOrigin.hostname.endsWith('.googleusercontent.com')))return;
+ }
  let result=e.data;
  if(typeof result==='string'){try{result=JSON.parse(result)}catch(_){return}}
- if(!result||result.app!=='may_spa_booking')return;
+ if(!result||result.app!=='may_spa_booking'||!activeRequestId||result.request_id!==activeRequestId)return;
  if(result.ok!==true||result.code!=='SAVED'||!result.booking_id){
-   awaitingLeadResponse=false;submitting=false;
+   awaitingLeadResponse=false;submitting=false;activeRequestId='';
    const button=form?.querySelector('button[type=submit]');if(button){button.disabled=false;button.textContent='Gửi yêu cầu đặt lịch →'}
    status.textContent='Chưa thể xác nhận lịch đặt. Vui lòng thử lại hoặc gọi Mây: 0911 400 718.';status.style.color='#8a5b1d';return;
  }
- awaitingLeadResponse=false;submitting=false;
+ awaitingLeadResponse=false;submitting=false;activeRequestId='';
  const date=bookingDate.value.split('-');
  if(bookingModalDetail)bookingModalDetail.textContent='Ngày đặt lịch: '+date.slice().reverse().join('/')+' • Thời gian: '+bookingTime.value;
  if(bookingModal){bookingModal.hidden=false;document.body.style.overflow='hidden';bookingModalClose?.focus()}
@@ -133,6 +138,8 @@ form?.addEventListener('submit',e=>{
    phone.focus();
    return;
  }
+ activeRequestId=(typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function')?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+ requestField.value=activeRequestId;
  submitting=true;
  awaitingLeadResponse=true;
  const btn=form.querySelector('button[type=submit]');
@@ -146,6 +153,7 @@ form?.addEventListener('submit',e=>{
    if(awaitingLeadResponse){
      awaitingLeadResponse=false;
      submitting=false;
+     activeRequestId='';
      btn.disabled=false;
      btn.textContent='Gửi yêu cầu đặt lịch →';
      status.textContent='Nếu chưa thấy xác nhận, vui lòng thử lại hoặc gọi Mây: 0911 400 718.';
