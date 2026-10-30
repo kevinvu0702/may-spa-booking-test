@@ -91,13 +91,13 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bookingModal&&!book
 // Only a verified SAVED response from the Apps Script iframe may confirm a booking.
 // The deployed Apps Script must explicitly postMessage the SAVED result after sheet append.
 window.addEventListener('message',e=>{
- if(!awaitingLeadResponse||!leadTarget||e.source!==leadTarget.contentWindow)return;
+ // HtmlService may post from a nested googleusercontent iframe, not the outer form target.
+ if(!awaitingLeadResponse||!leadTarget)return;
  // Apps Script HtmlService may emit postMessage with an opaque ('null') origin.
  // The message must still originate from our exact hidden iframe and contain a SAVED booking ID.
- if(e.origin!=='null'){
-   let responseOrigin;try{responseOrigin=new URL(e.origin)}catch(_){return}
-   if(responseOrigin.protocol!=='https:'||!(responseOrigin.hostname==='script.google.com'||responseOrigin.hostname.endsWith('.googleusercontent.com')))return;
- }
+ if(e.origin==='null')return; // Reject opaque-origin messages until a per-request nonce is implemented server-side.
+ let responseOrigin;try{responseOrigin=new URL(e.origin)}catch(_){return}
+ if(responseOrigin.protocol!=='https:'||!(responseOrigin.hostname==='script.google.com'||responseOrigin.hostname.endsWith('.googleusercontent.com')))return;
  let result=e.data;
  if(typeof result==='string'){try{result=JSON.parse(result)}catch(_){return}}
  if(!result||result.app!=='may_spa_booking')return;
