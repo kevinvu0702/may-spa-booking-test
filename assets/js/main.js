@@ -92,7 +92,8 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bookingModal&&!book
 // The deployed Apps Script must explicitly postMessage the SAVED result after sheet append.
 window.addEventListener('message',e=>{
  if(!awaitingLeadResponse||!leadTarget||e.source!==leadTarget.contentWindow)return;
- if(!/^https:\\/\\/(script\\.google\\.com|[a-z0-9.-]*googleusercontent\\.com)$/.test(e.origin))return;
+ let responseOrigin;try{responseOrigin=new URL(e.origin)}catch(_){return}
+ if(responseOrigin.protocol!=='https:'||!(responseOrigin.hostname==='script.google.com'||responseOrigin.hostname.endsWith('.googleusercontent.com')))return;
  let result=e.data;
  if(typeof result==='string'){try{result=JSON.parse(result)}catch(_){return}}
  if(!result||result.app!=='may_spa_booking')return;
