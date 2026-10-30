@@ -47,7 +47,7 @@ function setupFeedback(){
 }
 setupFeedback();
 
-const form=$('#lead-form'), status=$('#form-status'), phone=$('#phone'), phoneErr=$('#phone-error'), leadTarget=$('#lead-submit-target');
+const form=$('#lead-form'), status=$('#form-status'), phone=$('#phone'), phoneErr=$('#phone-error'), nameInput=$('#name'), nameErr=$('#name-error'), leadTarget=$('#lead-submit-target');
 let submitting=false, awaitingLeadResponse=false;
 function validPhone(v){return /^0[0-9]{9}$/.test(normalizePhone(v))}
 // Persist acquisition attribution in the current browser for direct return visits.
@@ -68,7 +68,7 @@ function setupBookingSlots(){
  if(!bookingDate||!bookingTime)return;
  const today=spaNow();bookingDate.min=localDateString(today);
  const max=new Date(today);max.setDate(max.getDate()+30);bookingDate.max=localDateString(max);
- const selected=bookingTime.value;bookingTime.innerHTML='<option value="">Chọn giờ đến</option>';
+ const selected=bookingTime.value;bookingTime.innerHTML='<option value="">Chọn thời gian</option>';
  const isToday=bookingDate.value===localDateString(today);
  for(let minute=9*60;minute<=19*60+30;minute+=15){
    if(isToday&&minute<=today.getHours()*60+today.getMinutes())continue;
@@ -80,6 +80,7 @@ function setupBookingSlots(){
 bookingDate?.addEventListener('change',()=>{bookingTime.value='';setupBookingSlots();$('#booking-date-error').textContent=''});
 bookingTime?.addEventListener('change',()=>{$('#booking-time-error').textContent=''});
 setupBookingSlots();
+nameInput?.addEventListener('input',()=>{if(nameErr)nameErr.textContent=''});
 phone?.addEventListener('input',()=>{phoneErr.textContent='';if(!phone.dataset.started){phone.dataset.started='1';track('form_start')}});
 
 leadTarget?.addEventListener('load',()=>{
@@ -99,6 +100,7 @@ leadTarget?.addEventListener('load',()=>{
 form?.addEventListener('submit',e=>{
  if(submitting){e.preventDefault();return}
  const p=phone.value.trim();
+ if(!nameInput?.value.trim()){e.preventDefault();if(nameErr)nameErr.textContent='Vui lòng nhập họ và tên.';nameInput?.focus();return}
  const now=spaNow();
  if(!bookingDate.value||bookingDate.value<localDateString(now)||bookingDate.value>bookingDate.max){e.preventDefault();$('#booking-date-error').textContent='Vui lòng chọn ngày hợp lệ trong 30 ngày tới.';bookingDate.focus();return}
  setupBookingSlots();
