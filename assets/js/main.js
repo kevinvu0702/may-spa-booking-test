@@ -92,8 +92,12 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bookingModal&&!book
 // The deployed Apps Script must explicitly postMessage the SAVED result after sheet append.
 window.addEventListener('message',e=>{
  if(!awaitingLeadResponse||!leadTarget||e.source!==leadTarget.contentWindow)return;
- let responseOrigin;try{responseOrigin=new URL(e.origin)}catch(_){return}
- if(responseOrigin.protocol!=='https:'||!(responseOrigin.hostname==='script.google.com'||responseOrigin.hostname.endsWith('.googleusercontent.com')))return;
+ // Apps Script HtmlService may emit postMessage with an opaque ('null') origin.
+ // The message must still originate from our exact hidden iframe and contain a SAVED booking ID.
+ if(e.origin!=='null'){
+   let responseOrigin;try{responseOrigin=new URL(e.origin)}catch(_){return}
+   if(responseOrigin.protocol!=='https:'||!(responseOrigin.hostname==='script.google.com'||responseOrigin.hostname.endsWith('.googleusercontent.com')))return;
+ }
  let result=e.data;
  if(typeof result==='string'){try{result=JSON.parse(result)}catch(_){return}}
  if(!result||result.app!=='may_spa_booking')return;
@@ -112,19 +116,7 @@ window.addEventListener('message',e=>{
  const button=form?.querySelector('button[type=submit]');if(button){button.disabled=false;button.textContent='Gửi yêu cầu đặt lịch →'}
 });
 
-leadTarget?.addEventListener('load',()=>{
- if(!awaitingLeadResponse)return;
- awaitingLeadResponse=false;
- submitting=false;
- const btn=form?.querySelector('button[type=submit]');
- if(btn){btn.disabled=false;btn.textContent='Gửi yêu cầu đặt lịch →'}
- status.textContent='Yêu cầu đã được gửi đi, nhưng hệ thống chưa xác minh được kết quả lưu thông tin. Nếu cần đặt lịch ngay, vui lòng gọi 0911 400 718.';
- status.style.color='#8a5b1d';
- const submittedPhone=normalizePhone(phone?.value||'');
- // Keep the entered information until a verified success response is available.
- track('form_transport_complete',{mode:'apps_script_iframe_unverified'});
- // Do not fire generate_lead: iframe load alone does not verify successful lead storage.
-});
+// iframe load is not proof of success or failure; wait for the signed-shape SAVED message.
 
 form?.addEventListener('submit',e=>{
  if(submitting){e.preventDefault();return}
@@ -159,6 +151,6 @@ form?.addEventListener('submit',e=>{
      status.textContent='Nếu chưa thấy xác nhận, vui lòng thử lại hoặc gọi Mây: 0911 400 718.';
      status.style.color='#8a5b1d';
    }
- },10000);
+ },15000);
 });
 
