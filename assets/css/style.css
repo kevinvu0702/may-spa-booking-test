@@ -274,3 +274,10 @@
 .booking-trust-list strong{color:#153b28}
 .booking-trust-note{font-weight:600;color:#087b45;margin:10px 0 24px!important}
 @media(max-width:680px){.booking-trust-list{gap:9px}.booking-trust-list li{font-size:14px;padding:12px 12px 12px 43px}.booking-trust-list li::before{left:12px;top:13px}}
+
+/* Booking contact card: clear specialization and direct contact channels */
+.booking-copy .contact-mini strong{display:block;line-height:1.4}
+.booking-copy .contact-mini span{display:block;line-height:1.65}
+.booking-copy .contact-mini span b{font-weight:700}
+.booking-copy .contact-mini .contact-zalo{display:inline-block;margin-left:10px;font-size:14px;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:680px){.booking-copy .contact-mini .contact-zalo{margin-left:8px}}
