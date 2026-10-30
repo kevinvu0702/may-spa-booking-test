@@ -92,36 +92,38 @@ function closeBookingModal(){if(bookingModal)bookingModal.hidden=true;document.b
 bookingModalClose?.addEventListener('click',closeBookingModal);
 bookingModal?.addEventListener('click',e=>{if(e.target===bookingModal)closeBookingModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bookingModal&&!bookingModal.hidden)closeBookingModal()});
-// Only a verified SAVED response from the Apps Script iframe may confirm a booking.
-// The deployed Apps Script must explicitly postMessage the SAVED result after sheet append.
+let bookingTimer=null, bookingDone=false, bookingDateSent='', bookingTimeSent='';
+function showBookingNotice(verified){
+ if(bookingDone)return;
+ bookingDone=true;awaitingLeadResponse=false;submitting=false;activeRequestId='';
+ if(bookingTimer){clearTimeout(bookingTimer);bookingTimer=null}
+ if(bookingModalDetail)bookingModalDetail.textContent='Ngày đặt lịch: '+bookingDateSent.split('-').reverse().join('/')+' • Thời gian: '+bookingTimeSent;
+ const heading=$('#booking-success-title');
+ if(heading)heading.textContent=verified?'Mây Spa đã nhận lịch đặt của bạn!':'Yêu cầu đặt lịch đã được gửi!';
+ const description=bookingModal?.querySelector('.booking-modal-panel p:not(#booking-success-detail)');
+ if(description)description.textContent=verified?'Mây Spa đã nhận được lịch hẹn. Bạn có thể đến spa đúng lịch đã đặt nhé!':'Thông tin đặt lịch đã được gửi đến Mây Spa. Nếu cần kiểm tra lịch, vui lòng gọi Mây: 0911 400 718.';
+ if(bookingModal){bookingModal.hidden=false;document.body.style.overflow='hidden';bookingModalClose?.focus()}
+ status.textContent=verified?'Mây Spa đã ghi nhận lịch đặt.':'Yêu cầu đặt lịch đã được gửi; chưa xác minh phản hồi lưu dữ liệu.';
+ status.style.color=verified?'#087b45':'#617167';
+ if(verified)track('generate_lead',{lead_type:'booking_request',booking_status:'cho_xac_nhan'});
+ form?.reset();setupBookingSlots();
+ const button=form?.querySelector('button[type=submit]');if(button){button.disabled=false;button.textContent='Gửi yêu cầu đặt lịch →'}
+}
 window.addEventListener('message',e=>{
- // HtmlService may post from a nested googleusercontent iframe, not the outer form target.
- if(!awaitingLeadResponse||!leadTarget)return;
- // HtmlService may use an opaque origin. Accept it only with a matching
- // unpredictable per-submission request_id; never accept arbitrary opaque messages.
+ if(!awaitingLeadResponse||!activeRequestId)return;
  if(e.origin!=='null'){
-   let responseOrigin;try{responseOrigin=new URL(e.origin)}catch(_){return}
-   if(responseOrigin.protocol!=='https:'||!(responseOrigin.hostname==='script.google.com'||responseOrigin.hostname.endsWith('.googleusercontent.com')))return;
+  let origin;try{origin=new URL(e.origin)}catch(_){return}
+  if(origin.protocol!=='https:'||!(origin.hostname==='script.google.com'||origin.hostname.endsWith('.googleusercontent.com')))return;
  }
  let result=e.data;
  if(typeof result==='string'){try{result=JSON.parse(result)}catch(_){return}}
- if(!result||result.app!=='may_spa_booking'||!activeRequestId||result.request_id!==activeRequestId)return;
- if(result.ok!==true||result.code!=='SAVED'||!result.booking_id){
-   awaitingLeadResponse=false;submitting=false;activeRequestId='';
-   const button=form?.querySelector('button[type=submit]');if(button){button.disabled=false;button.textContent='Gửi yêu cầu đặt lịch →'}
-   status.textContent='Chưa thể xác nhận lịch đặt. Vui lòng thử lại hoặc gọi Mây: 0911 400 718.';status.style.color='#8a5b1d';return;
- }
+ if(!result||result.app!=='may_spa_booking'||result.request_id!==activeRequestId)return;
+ if(result.ok===true&&result.code==='SAVED'&&result.booking_id){showBookingNotice(true);return}
+ if(bookingTimer){clearTimeout(bookingTimer);bookingTimer=null}
  awaitingLeadResponse=false;submitting=false;activeRequestId='';
- const date=bookingDate.value.split('-');
- if(bookingModalDetail)bookingModalDetail.textContent='Ngày đặt lịch: '+date.slice().reverse().join('/')+' • Thời gian: '+bookingTime.value;
- if(bookingModal){bookingModal.hidden=false;document.body.style.overflow='hidden';bookingModalClose?.focus()}
- status.textContent='Mây Spa đã nhận yêu cầu đặt lịch.';status.style.color='#087b45';
- track('generate_lead',{lead_type:'booking_request',booking_status:'cho_xac_nhan'});
- form?.reset();setupBookingSlots();
  const button=form?.querySelector('button[type=submit]');if(button){button.disabled=false;button.textContent='Gửi yêu cầu đặt lịch →'}
+ status.textContent='Chưa thể tiếp nhận lịch đặt. Vui lòng kiểm tra hoặc gọi Mây: 0911 400 718.';status.style.color='#8a5b1d';
 });
-
-// iframe load is not proof of success or failure; wait for the signed-shape SAVED message.
 
 form?.addEventListener('submit',e=>{
  if(submitting){e.preventDefault();return}
@@ -140,6 +142,9 @@ form?.addEventListener('submit',e=>{
  }
  activeRequestId=(typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function')?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
  requestField.value=activeRequestId;
+ bookingDone=false;
+ bookingDateSent=bookingDate.value;
+ bookingTimeSent=bookingTime.value;
  submitting=true;
  awaitingLeadResponse=true;
  const btn=form.querySelector('button[type=submit]');
@@ -147,18 +152,6 @@ form?.addEventListener('submit',e=>{
  btn.textContent='Đang gửi...';
  status.textContent='Đang gửi thông tin đến Mây...';
  status.style.color='#617167';
- // Native POST goes to the deployed Apps Script web app in a hidden iframe.
- // Existing Apps Script endpoint must be updated to map new booking and attribution fields into the Sheet.
- setTimeout(()=>{
-   if(awaitingLeadResponse){
-     awaitingLeadResponse=false;
-     submitting=false;
-     activeRequestId='';
-     btn.disabled=false;
-     btn.textContent='Gửi yêu cầu đặt lịch →';
-     status.textContent='Nếu chưa thấy xác nhận, vui lòng thử lại hoặc gọi Mây: 0911 400 718.';
-     status.style.color='#8a5b1d';
-   }
- },15000);
+ // The 3-second fallback confirms submission only, not Sheet persistence.
+ bookingTimer=setTimeout(()=>{if(awaitingLeadResponse)showBookingNotice(false)},3000);
 });
-
